@@ -88,6 +88,7 @@ function onPosition(pos) {
 
   setStatus("Tracking live position…");
   updateReadout(pos.coords);
+  updatePoiAudio(latitude, longitude);
 
   if (!marker) {
     marker = L.marker(latlng, { icon: dotIcon }).addTo(map);
@@ -118,6 +119,7 @@ function onError(err) {
 
 // --- Tracking control --------------------------------------------------------
 function startTracking() {
+  unlockPoiAudio();
   if (!("geolocation" in navigator)) {
     setStatus("Geolocation is not supported by this browser.", true);
     return;
@@ -150,6 +152,7 @@ function stopTracking() {
   }
   autoRecenter = true;
   updateReadout({});
+  stopAllPoiAudio();
   setStatus('Tracking stopped. Tap "Locate me" to start again.');
   stopBtn.hidden = true;
   startBtn.hidden = false;
@@ -187,6 +190,13 @@ const TRAIL_STYLE_SELECTED = { color: "#e8590c", weight: 6, opacity: 1 };
 
 let trails = [];          // { name, layer, listItem }
 let selectedTrail = null;
+
+// --- Proximity audio ---------------------------------------------------------
+const AUDIO_START_DISTANCE_M = 60; // Music starts within this distance
+const AUDIO_FULL_VOLUME_DISTANCE_M = 5; // Full volume within this distance
+
+let poiAudios = [];
+let audioUnlocked = false;
 
 // Parse a GPX document into an array of { name, coords:[[lat,lng],...] } tracks.
 function parseGpx(xmlText) {
@@ -232,6 +242,8 @@ modalCloseBtn.addEventListener("click", closeTrailModal);
 // "Start" mirrors the "Locate me" button: begin live tracking and follow the
 // user's position, recentering on them once a fix arrives.
 modalStartBtn.addEventListener("click", () => {
+  unlockPoiAudio();
+
   autoRecenter = true;
   closeTrailModal();
   if (marker) {
@@ -241,6 +253,88 @@ modalStartBtn.addEventListener("click", () => {
     startTracking();
   }
 });
+
+function distanceMeters(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const rad = (d) => (d * Math.PI) / 180;
+
+  const dLat = rad(lat2 - lat1);
+  const dLng = rad(lng2 - lng1);
+
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(rad(lat1)) *
+      Math.cos(rad(lat2)) *
+      Math.sin(dLng / 2) ** 2;
+
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+function volumeFromDistance(distanceM) {
+  if (distanceM >= AUDIO_START_DISTANCE_M) return 0;
+  if (distanceM <= AUDIO_FULL_VOLUME_DISTANCE_M) return 1;
+
+  const range = AUDIO_START_DISTANCE_M - AUDIO_FULL_VOLUME_DISTANCE_M;
+  const closeness = (AUDIO_START_DISTANCE_M - distanceM) / range;
+
+  return Math.max(0, Math.min(1, closeness));
+}
+
+function unlockPoiAudio() {
+  if (audioUnlocked) return;
+
+  poiAudios.forEach((poiAudio) => {
+    const audio = poiAudio.audioEl;
+
+    audio.muted = true;
+    audio
+      .play()
+      .then(() => {
+        audio.pause();
+        audio.currentTime = 0;
+        audio.muted = false;
+      })
+      .catch(() => {
+        // Browser may still block audio until another user interaction.
+      });
+  });
+
+  audioUnlocked = true;
+}
+
+function updatePoiAudio(userLat, userLng) {
+  poiAudios.forEach((poiAudio) => {
+    const distanceM = distanceMeters(
+      userLat,
+      userLng,
+      poiAudio.lat,
+      poiAudio.lng
+    );
+
+    const volume = volumeFromDistance(distanceM);
+    poiAudio.audioEl.volume = volume;
+
+    if (volume > 0) {
+      if (poiAudio.audioEl.paused) {
+        poiAudio.audioEl.play().catch(() => {
+          // Autoplay may be blocked until the user clicks Locate me / Start.
+        });
+      }
+    } else {
+      if (!poiAudio.audioEl.paused) {
+        poiAudio.audioEl.pause();
+      }
+    }
+  });
+}
+
+function stopAllPoiAudio() {
+  poiAudios.forEach((poiAudio) => {
+    poiAudio.audioEl.pause();
+    poiAudio.audioEl.currentTime = 0;
+    poiAudio.audioEl.volume = 0;
+  });
+}
 
 // Great-circle distance (km) summed along a coordinate path.
 function pathLengthKm(coords) {
@@ -299,10 +393,24 @@ function loadEntry(entry) {
 
   // Points of interest along the trail.
   (entry.pois || []).forEach((poi) => {
-    L.marker([poi.lat, poi.lng], { icon: poiIcon, title: poi.name })
-      .addTo(map)
-      .bindPopup(poi.name);
-  });
+  L.marker([poi.lat, poi.lng], { icon: poiIcon, title: poi.name })
+    .addTo(map)
+    .bindPopup(poi.name);
+
+  if (poi.audio) {
+    const audioEl = new Audio(poi.audio);
+    audioEl.loop = true;
+    audioEl.preload = "auto";
+    audioEl.volume = 0;
+
+    poiAudios.push({
+      lat: poi.lat,
+      lng: poi.lng,
+      name: poi.name,
+      audioEl,
+    });
+  }
+});
 }
 
 // Read trail data embedded via the trails/*.gpx.js scripts. This loads straight
