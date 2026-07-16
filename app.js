@@ -192,7 +192,7 @@ let trails = [];          // { name, layer, listItem }
 let selectedTrail = null;
 
 // --- Proximity audio ---------------------------------------------------------
-const AUDIO_START_DISTANCE_M = 60; // Music starts within this distance
+const AUDIO_START_DISTANCE_M = 20; // Music starts within this distance
 const AUDIO_FULL_VOLUME_DISTANCE_M = 5; // Full volume within this distance
 
 let poiAudios = [];

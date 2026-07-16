@@ -4,7 +4,7 @@ window.TRAIL_DATA = window.TRAIL_DATA || [];
 window.TRAIL_DATA.push({
   "file": "nussberg-nussdorf.gpx",
   "name": "Nussberg → Wien Nußdorf",
-  "description": "A scenic downhill walk from the Nussberg vineyards above Vienna down to Nußdorf by the Danube. Gentle, mostly paved, with great views over the city and the wine hills. Great for an easy afternoon stroll.",
+  "description": "A scenic uphill walk from Nußdorf by the Danube up through the Nussberg vineyards above Vienna. Mostly paved, with great views over the city and the wine hills as you climb. Great for an energising and scenic afternoon walk.",
   "pois": [
     { "lat": 48.2651600, "lng": 16.3615258, "name": "Scenic vista", "audio": "audio/01. Lion King - This Land.mp3" },
     //{ "lat": 48.18250, "lng": 16.36310, "name": "Location Test", "audio": "audio/01. Lion King - This Land.mp3" },
